@@ -26,7 +26,7 @@ RUN pnpm --filter @workspace/db exec tsc
 RUN pnpm --filter @workspace/api-server run build
 
 # Deploy to standalone dir + dereference all symlinks so it works without pnpm store
-RUN pnpm --filter @workspace/api-server deploy --prod /deploy
+RUN pnpm --filter @workspace/api-server deploy --prod --legacy /deploy
 RUN rsync -rL /deploy/node_modules/ /deploy/node_modules_flat/
 RUN rm -rf /deploy/node_modules && mv /deploy/node_modules_flat /deploy/node_modules
 
