@@ -28,6 +28,6 @@ ENV API_URL=http://localhost:8080
 # Use nginx template mechanism — envsubst replaces $API_URL at container start
 COPY artifacts/traffic-forge/nginx.conf.template /etc/nginx/templates/default.conf.template
 
-COPY --from=builder /app/artifacts/traffic-forge/dist /usr/share/nginx/html
+COPY --from=builder /app/artifacts/traffic-forge/dist/public /usr/share/nginx/html
 
 EXPOSE 80
