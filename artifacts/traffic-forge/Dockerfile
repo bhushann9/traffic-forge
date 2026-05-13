@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.7
-
 # ─── Build stage ──────────────────────────────────────────────────────────────
 FROM node:20-bookworm-slim AS builder
 
@@ -24,36 +22,11 @@ RUN pnpm --filter traffic-forge-frontend run build
 # ─── Runtime stage (nginx serving the static SPA) ─────────────────────────────
 FROM nginx:1.27-alpine
 
-# SPA fallback to index.html so client-side routes work
-RUN <<EOF cat > /etc/nginx/conf.d/default.conf
-server {
-  listen 80;
-  server_name _;
-  root /usr/share/nginx/html;
-  index index.html;
+# API URL injected at runtime via environment variable
+ENV API_URL=http://localhost:8080
 
-  location / {
-    try_files \$uri \$uri/ /index.html;
-  }
-
-  # Proxy API + WebSocket to the api-server container
-  location /api/ {
-    proxy_pass http://api-server:8080/api/;
-    proxy_http_version 1.1;
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-  }
-
-  location /ws/ {
-    proxy_pass http://api-server:8080/ws/;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade \$http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_read_timeout 3600s;
-  }
-}
-EOF
+# Use nginx template mechanism — envsubst replaces $API_URL at container start
+COPY artifacts/traffic-forge/nginx.conf.template /etc/nginx/templates/default.conf.template
 
 COPY --from=builder /app/artifacts/traffic-forge/dist /usr/share/nginx/html
 

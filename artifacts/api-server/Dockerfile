@@ -25,16 +25,15 @@ COPY artifacts/api-server artifacts/api-server
 RUN pnpm --filter @workspace/db exec tsc
 RUN pnpm --filter @workspace/api-server run build
 
-# Create standalone deployment with proper flattened node_modules
-RUN pnpm --filter @workspace/api-server deploy --prod /deploy
-
 # ─── Runtime stage ────────────────────────────────────────────────────────────
 FROM mcr.microsoft.com/playwright:v1.59.1-noble AS runtime
 
 WORKDIR /app
 
 COPY --from=builder /app/artifacts/api-server/dist ./dist
-COPY --from=builder /deploy/node_modules ./node_modules
+
+# Install playwright as external dependency (externalized by esbuild)
+RUN npm install playwright@1.59.1 --no-save --ignore-scripts
 
 ENV NODE_ENV=production
 ENV PORT=8080
