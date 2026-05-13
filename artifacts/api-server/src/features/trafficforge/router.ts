@@ -1116,7 +1116,7 @@ const scenarioRunSchema = z.object({
   allowHealing: z.boolean().optional(),
   headless: z.boolean().optional(),
   storageStatePath: z.string().max(500).optional(),
-  llmProvider: llmProviderEnum,
+  llmProvider: llmProviderEnum.optional(),
   llmApiKey: z.string().optional(),
   llmModel: z.string().max(100).optional(),
   llmBaseUrl: z.string().url().optional(),
@@ -1146,17 +1146,6 @@ const startScenarioRun: RequestHandler = async (req, res) => {
   const body = validate(scenarioRunSchema, req.body, res);
   if (!body) return;
 
-  // Ollama runs locally so it doesn't need an API key. Every other provider does,
-  // unless the server has the corresponding env var set (in which case the
-  // shared FallbackLLMClient picks it up automatically).
-  const requiresKey = body.llmProvider !== 'ollama' && body.llmProvider !== 'none';
-  if (requiresKey && !body.llmApiKey) {
-    // We can still proceed if env-var creds are configured server-side; the
-    // resolveClient helper inside each agent will fall back to the shared
-    // singleton. This is best-effort — if env is also empty the agent will
-    // throw and the orchestrator will surface a clear error to the user.
-  }
-
   const runId = randomUUID();
   const orchestrator = new ScenarioOrchestrator();
 
@@ -1165,6 +1154,10 @@ const startScenarioRun: RequestHandler = async (req, res) => {
   orchestrator.on('event', (event) => {
     broadcastToRun(runId, { kind: 'scenario_event', runId, event });
   });
+
+  const resolvedProvider = (body.llmProvider ??
+    (process.env.LLM_PROVIDER as AgentLLMProvider | undefined) ??
+    'groq') as AgentLLMProvider;
 
   orchestrator
     .run(runId, {
@@ -1176,7 +1169,7 @@ const startScenarioRun: RequestHandler = async (req, res) => {
       headless: body.headless ?? true,
       storageStatePath: body.storageStatePath,
       llm: {
-        provider: body.llmProvider as AgentLLMProvider,
+        provider: resolvedProvider,
         apiKey: body.llmApiKey,
         model: body.llmModel,
         baseUrl: body.llmBaseUrl,

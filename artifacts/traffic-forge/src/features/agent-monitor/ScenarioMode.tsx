@@ -30,17 +30,16 @@ type LLMProvider =
 interface ProviderOption {
   value: LLMProvider;
   label: string;
-  needsKey: boolean;
 }
 
 const PROVIDER_OPTIONS: ProviderOption[] = [
-  { value: 'ollama',     label: 'Ollama (local, free)',                needsKey: false },
-  { value: 'claude',     label: 'Claude Sonnet 4.6 (best quality)',    needsKey: true  },
-  { value: 'groq',       label: 'Groq — LLaMA 3.3 (fast, free tier)',  needsKey: true  },
-  { value: 'gemini',     label: 'Gemini 2.0 Flash (free tier)',        needsKey: true  },
-  { value: 'cerebras',   label: 'Cerebras — LLaMA 3.3 (free tier)',    needsKey: true  },
-  { value: 'openrouter', label: 'OpenRouter (free LLaMA model)',       needsKey: true  },
-  { value: 'deepseek',   label: 'DeepSeek Chat (cheap)',               needsKey: true  },
+  { value: 'groq',       label: 'Groq — LLaMA 3.3 (server key)'       },
+  { value: 'claude',     label: 'Claude Sonnet 4.6 (server key)'      },
+  { value: 'gemini',     label: 'Gemini 2.0 Flash (server key)'       },
+  { value: 'cerebras',   label: 'Cerebras — LLaMA 3.3 (server key)'  },
+  { value: 'openrouter', label: 'OpenRouter (server key)'             },
+  { value: 'deepseek',   label: 'DeepSeek Chat (server key)'         },
+  { value: 'ollama',     label: 'Ollama (local)'                     },
 ];
 
 interface StepAction {
@@ -301,8 +300,7 @@ function PlanView({ plan }: { plan: TestPlan }) {
 function StartScenarioForm({ onStart }: { onStart: (runId: string) => void }) {
   const [goal, setGoal] = useState('');
   const [url, setUrl] = useState('');
-  const [provider, setProvider] = useState<LLMProvider>('ollama');
-  const [apiKey, setApiKey] = useState('');
+  const [provider, setProvider] = useState<LLMProvider>('groq');
   const [maxSteps, setMaxSteps] = useState(15);
   const [allowHealing, setAllowHealing] = useState(true);
   const [showBrowser, setShowBrowser] = useState(false);
@@ -319,7 +317,6 @@ function StartScenarioForm({ onStart }: { onStart: (runId: string) => void }) {
           allowHealing,
           headless: !showBrowser,
           llmProvider: provider,
-          llmApiKey: provider !== 'ollama' ? apiKey : undefined,
         }),
       });
       if (!res.ok) {
@@ -339,8 +336,6 @@ function StartScenarioForm({ onStart }: { onStart: (runId: string) => void }) {
       onStart(data.runId);
     },
   });
-
-  const needsKey = PROVIDER_OPTIONS.find((p) => p.value === provider)?.needsKey ?? true;
 
   return (
     <div className="border rounded-lg bg-card p-6 max-w-lg">
@@ -397,7 +392,7 @@ function StartScenarioForm({ onStart }: { onStart: (runId: string) => void }) {
           </div>
         </div>
         <div>
-          <label className="text-sm text-muted-foreground block mb-1">LLM provider</label>
+          <label className="text-sm text-muted-foreground block mb-1">LLM provider (uses server API key)</label>
           <select
             value={provider}
             onChange={(e) => setProvider(e.target.value as LLMProvider)}
@@ -408,23 +403,6 @@ function StartScenarioForm({ onStart }: { onStart: (runId: string) => void }) {
             ))}
           </select>
         </div>
-        {needsKey && (
-          <div>
-            <label className="text-sm text-muted-foreground block mb-1">API Key</label>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder={
-                provider === 'claude' ? 'sk-ant-...' :
-                provider === 'groq' ? 'gsk_...' :
-                provider === 'gemini' ? 'AIza...' :
-                'API key'
-              }
-              className="w-full border border-border rounded px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-        )}
         <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
           <input
             type="checkbox"
@@ -435,7 +413,7 @@ function StartScenarioForm({ onStart }: { onStart: (runId: string) => void }) {
         </label>
         <button
           onClick={() => start.mutate()}
-          disabled={!goal || !url || (needsKey && !apiKey) || start.isPending}
+          disabled={!goal || !url || start.isPending}
           className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded px-4 py-2 text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
         >
           <Play className="w-4 h-4" />

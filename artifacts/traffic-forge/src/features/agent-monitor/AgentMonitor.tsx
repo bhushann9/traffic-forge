@@ -305,24 +305,22 @@ type SwarmLLM =
   | 'openrouter'
   | 'deepseek';
 
-const SWARM_LLM_OPTIONS: Array<{ value: SwarmLLM; label: string; needsKey: boolean }> = [
-  { value: 'none',       label: 'None (deterministic only)',          needsKey: false },
-  { value: 'ollama',     label: 'Ollama (local, free)',               needsKey: false },
-  { value: 'claude',     label: 'Claude Sonnet 4.6',                  needsKey: true  },
-  { value: 'groq',       label: 'Groq — LLaMA 3.3 (fast, free)',      needsKey: true  },
-  { value: 'gemini',     label: 'Gemini 2.0 Flash (free tier)',       needsKey: true  },
-  { value: 'cerebras',   label: 'Cerebras — LLaMA 3.3 (free)',        needsKey: true  },
-  { value: 'openrouter', label: 'OpenRouter (free LLaMA model)',      needsKey: true  },
-  { value: 'deepseek',   label: 'DeepSeek Chat',                      needsKey: true  },
+const SWARM_LLM_OPTIONS: Array<{ value: SwarmLLM; label: string }> = [
+  { value: 'none',       label: 'None (deterministic only)'        },
+  { value: 'groq',       label: 'Groq — LLaMA 3.3 (server key)'   },
+  { value: 'claude',     label: 'Claude Sonnet 4.6 (server key)'  },
+  { value: 'gemini',     label: 'Gemini 2.0 Flash (server key)'   },
+  { value: 'cerebras',   label: 'Cerebras — LLaMA 3.3 (server key)' },
+  { value: 'openrouter', label: 'OpenRouter (server key)'         },
+  { value: 'deepseek',   label: 'DeepSeek Chat (server key)'      },
+  { value: 'ollama',     label: 'Ollama (local)'                  },
 ];
 
 function StartSwarmForm({ onStart }: { onStart: (runId: string) => void }) {
   const [url, setUrl] = useState('');
   const [steps, setSteps] = useState(50);
-  const [llm, setLlm] = useState<SwarmLLM>('none');
-  const [apiKey, setApiKey] = useState('');
+  const [llm, setLlm] = useState<SwarmLLM>('groq');
   const [showBrowser, setShowBrowser] = useState(false);
-  const needsKey = SWARM_LLM_OPTIONS.find((p) => p.value === llm)?.needsKey ?? false;
 
   const start = useMutation({
     mutationFn: async () => {
@@ -333,7 +331,6 @@ function StartSwarmForm({ onStart }: { onStart: (runId: string) => void }) {
           targetUrl: url,
           maxSteps: steps,
           llmProvider: llm,
-          llmApiKey: needsKey ? apiKey : undefined,
           headless: !showBrowser,
         }),
       });
@@ -376,7 +373,7 @@ function StartSwarmForm({ onStart }: { onStart: (runId: string) => void }) {
           />
         </div>
         <div>
-          <label className="text-sm text-muted-foreground block mb-1">Fix narrative LLM</label>
+          <label className="text-sm text-muted-foreground block mb-1">AI Narrative (uses server API key)</label>
           <select
             value={llm}
             onChange={(e) => setLlm(e.target.value as SwarmLLM)}
@@ -387,18 +384,6 @@ function StartSwarmForm({ onStart }: { onStart: (runId: string) => void }) {
             ))}
           </select>
         </div>
-        {needsKey && (
-          <div>
-            <label className="text-sm text-muted-foreground block mb-1">API Key</label>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-..."
-              className="w-full border border-border rounded px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-        )}
         <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
           <input
             type="checkbox"
