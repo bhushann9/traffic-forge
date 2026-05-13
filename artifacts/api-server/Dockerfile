@@ -2,7 +2,7 @@
 FROM node:20-bookworm-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl rsync \
+    ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
 
 ENV PNPM_HOME=/usr/local/share/pnpm
@@ -25,18 +25,24 @@ COPY artifacts/api-server artifacts/api-server
 RUN pnpm --filter @workspace/db exec tsc
 RUN pnpm --filter @workspace/api-server run build
 
-# Deploy to standalone dir + dereference all symlinks so it works without pnpm store
-RUN pnpm --filter @workspace/api-server deploy --prod --legacy /deploy
-RUN rsync -rL /deploy/node_modules/ /deploy/node_modules_flat/
-RUN rm -rf /deploy/node_modules && mv /deploy/node_modules_flat /deploy/node_modules
-
 # ─── Runtime stage ────────────────────────────────────────────────────────────
 FROM mcr.microsoft.com/playwright:v1.59.1-noble AS runtime
 
 WORKDIR /app
 
 COPY --from=builder /app/artifacts/api-server/dist ./dist
-COPY --from=builder /deploy/node_modules ./node_modules
+
+# Install all packages marked external in build.mjs that are actually used:
+# - playwright + playwright-core (browser engine, externalized by esbuild)
+# - @swc/helpers (externalized via @swc/* wildcard, required by pdfkit→fontkit)
+# - bufferutil + utf-8-validate (optional ws perf deps)
+RUN npm install \
+    playwright@1.59.1 \
+    playwright-core@1.59.1 \
+    @swc/helpers \
+    bufferutil \
+    utf-8-validate \
+    --no-save --ignore-scripts
 
 ENV NODE_ENV=production
 ENV PORT=8080
