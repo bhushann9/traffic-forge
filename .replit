@@ -1,0 +1,76 @@
+modules = ["nodejs-20", "web", "postgresql-16"]
+[agent]
+expertMode = true
+stack = "BEST_EFFORT_FALLBACK"
+
+[nix]
+channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+PORT = "8080"
+NODE_ENV = "development"
+LOG_LEVEL = "info"
+LLM_PROVIDER = "groq"
+LLM_FALLBACK = "groq,anthropic,ollama"
+ANTHROPIC_MODEL = "claude-haiku-4-5"
+GROQ_MODEL = "llama-3.3-70b-versatile"
+CEREBRAS_MODEL = "llama-3.3-70b"
+OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
+DEEPSEEK_MODEL = "deepseek-chat"
+OLLAMA_HOST = "http://localhost:11434"
+OLLAMA_MODEL = "llama3.1:8b"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Backend API"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter traffic-forge-frontend run dev"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow]]
+name = "Backend API"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/api-server run dev"
+waitForPort = 8080
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["node", "--enable-source-maps", "artifacts/api-server/dist/index.mjs"]
+build = ["pnpm", "run", "build"]
