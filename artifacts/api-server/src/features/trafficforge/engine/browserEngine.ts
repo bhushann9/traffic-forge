@@ -798,6 +798,9 @@ export async function runBrowserLoadTest(
   completed: number;
   failed: number;
   avgDurationMs: number;
+  p50Ms: number;
+  p95Ms: number;
+  p99Ms: number;
   pageMetrics: Record<string, { count: number; avgMs: number; errors: number }>;
   errorsByType: Record<string, number>;
 }> {
@@ -922,5 +925,10 @@ export async function runBrowserLoadTest(
     errorsByType[k] = (errorsByType[k] ?? 0) + 1;
   }
 
-  return { completed, failed, avgDurationMs, pageMetrics, errorsByType };
+  const sorted = [...times].sort((a, b) => a - b);
+  const p95Ms = sorted.length > 0 ? sorted[Math.floor(sorted.length * 0.95)] ?? sorted[sorted.length - 1]! : 0;
+  const p99Ms = sorted.length > 0 ? sorted[Math.floor(sorted.length * 0.99)] ?? sorted[sorted.length - 1]! : 0;
+  const p50Ms = sorted.length > 0 ? sorted[Math.floor(sorted.length * 0.50)] ?? sorted[sorted.length - 1]! : 0;
+
+  return { completed, failed, avgDurationMs, p50Ms, p95Ms, p99Ms, pageMetrics, errorsByType };
 }

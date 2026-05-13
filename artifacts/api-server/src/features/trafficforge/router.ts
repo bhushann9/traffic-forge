@@ -326,7 +326,7 @@ const createTestConfig: RequestHandler = async (req, res) => {
         shadow_mode: body.shadow_mode ?? false,
         respect_rate_limits: body.respect_rate_limits ?? true,
         auto_stop_error_threshold: body.auto_stop_error_threshold ?? 10,
-        discovered_paths: body.discovered_paths ?? null,
+        discovered_paths: body.discovered_paths ?? [],
         test_mode: body.test_mode ?? 'http',
         browser_user_count: body.browser_user_count ?? 3,
         browser_duration_sec: body.browser_duration_sec ?? 60,
@@ -941,6 +941,10 @@ async function runRealLoadTestSession(
       } else {
         avgResponseMs = Math.round((avgResponseMs + avgMs) / 2);
       }
+      // Merge browser percentiles — only set if HTTP didn't already set them
+      if (p95Ms === 0 && stats.p95Ms) p95Ms = stats.p95Ms;
+      if (p99Ms === 0 && stats.p99Ms) p99Ms = stats.p99Ms;
+      if (p50Ms === 0 && stats.p50Ms) p50Ms = stats.p50Ms;
       for (const [k, v] of Object.entries(stats.pageMetrics)) {
         if (mergedPageMetrics[k]) {
           mergedPageMetrics[k].count += v.count;
@@ -1070,8 +1074,8 @@ const startSwarmRun: RequestHandler = async (req, res) => {
   agent
     .run({
       targetUrl: body.targetUrl,
-      maxSteps: body.maxSteps ?? 50,
-      stepTimeoutMs: body.stepTimeoutMs,
+      maxSteps: body.maxSteps ?? 20,
+      stepTimeoutMs: body.stepTimeoutMs ?? 6000,
       llmProvider: body.llmProvider ?? 'none',
       llmApiKey: body.llmApiKey,
       headless: body.headless ?? true,
