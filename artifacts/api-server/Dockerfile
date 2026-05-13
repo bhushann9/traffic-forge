@@ -2,7 +2,7 @@
 FROM node:20-bookworm-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl \
+    ca-certificates curl rsync \
   && rm -rf /var/lib/apt/lists/*
 
 ENV PNPM_HOME=/usr/local/share/pnpm
@@ -25,15 +25,18 @@ COPY artifacts/api-server artifacts/api-server
 RUN pnpm --filter @workspace/db exec tsc
 RUN pnpm --filter @workspace/api-server run build
 
+# Deploy to standalone dir + dereference all symlinks so it works without pnpm store
+RUN pnpm --filter @workspace/api-server deploy --prod /deploy
+RUN rsync -rL /deploy/node_modules/ /deploy/node_modules_flat/
+RUN rm -rf /deploy/node_modules && mv /deploy/node_modules_flat /deploy/node_modules
+
 # ─── Runtime stage ────────────────────────────────────────────────────────────
 FROM mcr.microsoft.com/playwright:v1.59.1-noble AS runtime
 
 WORKDIR /app
 
 COPY --from=builder /app/artifacts/api-server/dist ./dist
-
-# Install playwright as external dependency (externalized by esbuild)
-RUN npm install playwright@1.59.1 --no-save --ignore-scripts
+COPY --from=builder /deploy/node_modules ./node_modules
 
 ENV NODE_ENV=production
 ENV PORT=8080
