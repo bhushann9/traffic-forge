@@ -18,29 +18,6 @@ import {
 
 type StepStatus = 'pending' | 'running' | 'passed' | 'failed' | 'healed' | 'skipped';
 type ScenarioStatus = 'planning' | 'running' | 'passed' | 'failed' | 'aborted' | 'error';
-type LLMProvider =
-  | 'claude'
-  | 'groq'
-  | 'ollama'
-  | 'gemini'
-  | 'cerebras'
-  | 'openrouter'
-  | 'deepseek';
-
-interface ProviderOption {
-  value: LLMProvider;
-  label: string;
-}
-
-const PROVIDER_OPTIONS: ProviderOption[] = [
-  { value: 'groq',       label: 'Groq — LLaMA 3.3 (server key)'       },
-  { value: 'claude',     label: 'Claude Sonnet 4.6 (server key)'      },
-  { value: 'gemini',     label: 'Gemini 2.0 Flash (server key)'       },
-  { value: 'cerebras',   label: 'Cerebras — LLaMA 3.3 (server key)'  },
-  { value: 'openrouter', label: 'OpenRouter (server key)'             },
-  { value: 'deepseek',   label: 'DeepSeek Chat (server key)'         },
-  { value: 'ollama',     label: 'Ollama (local)'                     },
-];
 
 interface StepAction {
   type: 'navigate' | 'click' | 'fill' | 'expect_text' | 'expect_url' | 'wait_for' | 'wait_ms';
@@ -342,7 +319,6 @@ function PlanView({ plan }: { plan: TestPlan }) {
 function StartScenarioForm({ onStart }: { onStart: (runId: string) => void }) {
   const [goal, setGoal] = useState('');
   const [url, setUrl] = useState('');
-  const [provider, setProvider] = useState<LLMProvider>('groq');
   const [maxSteps, setMaxSteps] = useState(15);
   const [allowHealing, setAllowHealing] = useState(true);
   const [showBrowser, setShowBrowser] = useState(false);
@@ -358,7 +334,6 @@ function StartScenarioForm({ onStart }: { onStart: (runId: string) => void }) {
           maxSteps,
           allowHealing,
           headless: !showBrowser,
-          llmProvider: provider,
         }),
       });
       if (!res.ok) {
@@ -432,18 +407,6 @@ function StartScenarioForm({ onStart }: { onStart: (runId: string) => void }) {
               Allow self-healing
             </label>
           </div>
-        </div>
-        <div>
-          <label className="text-sm text-muted-foreground block mb-1">LLM provider (uses server API key)</label>
-          <select
-            value={provider}
-            onChange={(e) => setProvider(e.target.value as LLMProvider)}
-            className="w-full border border-border rounded px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-          >
-            {PROVIDER_OPTIONS.map((p) => (
-              <option key={p.value} value={p.value}>{p.label}</option>
-            ))}
-          </select>
         </div>
         <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
           <input

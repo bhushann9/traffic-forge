@@ -1076,8 +1076,7 @@ const startSwarmRun: RequestHandler = async (req, res) => {
       targetUrl: body.targetUrl,
       maxSteps: body.maxSteps ?? 20,
       stepTimeoutMs: body.stepTimeoutMs ?? 6000,
-      llmProvider: body.llmProvider ?? 'none',
-      llmApiKey: body.llmApiKey,
+      llmProvider: body.llmProvider ?? (process.env.LLM_PROVIDER as AgentLLMProvider | undefined) ?? 'groq',
       headless: body.headless ?? true,
     })
     .then((summary) => {

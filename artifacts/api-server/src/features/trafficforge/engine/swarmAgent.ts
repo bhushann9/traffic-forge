@@ -125,6 +125,9 @@ export class SwarmAgent extends EventEmitter {
       capture.drain();
 
       // ── Main swarm loop ─────────────────────────────────────────────────────
+      let stuckCount = 0;
+      let lastUrl = page.url();
+
       for (let i = 0; i < config.maxSteps && !this.aborted; i++) {
         const stepStart = Date.now();
 
@@ -135,13 +138,30 @@ export class SwarmAgent extends EventEmitter {
         const domBefore = await page.evaluate(() => document.body?.innerHTML ?? '').catch(() => '');
         const domSnapshotBefore = await EvidenceCapture.domSnapshot(page);
 
+        // If stuck on same URL for 3+ consecutive steps, go back to start
+        const currentUrl = page.url();
+        if (currentUrl === lastUrl) {
+          stuckCount++;
+        } else {
+          stuckCount = 0;
+          lastUrl = currentUrl;
+        }
+        if (stuckCount >= 3) {
+          await page.goto(config.targetUrl, { waitUntil: 'domcontentloaded', timeout: 10_000 }).catch(() => {});
+          stuckCount = 0;
+          lastUrl = page.url();
+          capture.drain();
+          continue;
+        }
+
         // 2. Pick a random clickable element
-        const { selector, text, found } = await this._pickRandomElement(page);
+        const { selector, elementIdx, text, found } = await this._pickRandomElement(page);
         if (!found) {
-          // No clickable elements — try scrolling down to reveal more
-          // @ts-ignore - window is available inside page.evaluate browser context
-          await page.evaluate(() => window.scrollBy(0, 400)).catch(() => {});
-          await page.waitForTimeout(200);
+          // No clickable elements — go back to start
+          await page.goto(config.targetUrl, { waitUntil: 'domcontentloaded', timeout: 10_000 }).catch(() => {});
+          stuckCount = 0;
+          lastUrl = page.url();
+          capture.drain();
           continue;
         }
 
@@ -149,15 +169,12 @@ export class SwarmAgent extends EventEmitter {
         capture.drain();
         pageErrors.splice(0);
 
-        // 4. Perform the click with timeout
+        // 4. Perform the click — use a short click timeout so unresponsive elements
+        //    fail fast rather than blocking the whole step for 6 seconds.
+        const clickTimeout = Math.min(stepTimeout, 3_000);
         let clickedOk = false;
         try {
-          await Promise.race([
-            page.locator(selector).first().click({ timeout: stepTimeout }),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error('Step timeout')), stepTimeout),
-            ),
-          ]);
+          await page.locator(selector).nth(elementIdx).click({ timeout: clickTimeout, force: true });
           clickedOk = true;
           // Wait for any triggered navigation / animations to settle
           await page.waitForLoadState('domcontentloaded', { timeout: 3_000 }).catch(() => {});
@@ -280,21 +297,38 @@ export class SwarmAgent extends EventEmitter {
 
   private async _pickRandomElement(
     page: Page,
-  ): Promise<{ selector: string; text: string; found: boolean }> {
-    // Try each selector group in priority order until we find candidates
+  ): Promise<{ selector: string; elementIdx: number; text: string; found: boolean }> {
     for (const sel of CLICKABLE_SELECTORS) {
       try {
-        const count = await page.locator(sel).count();
+        const allEls = page.locator(sel);
+        const count = await allEls.count();
         if (count === 0) continue;
-        const idx = Math.floor(Math.random() * Math.min(count, 20));
-        const el = page.locator(sel).nth(idx);
+
+        // Build candidate list, skipping useless hrefs and hidden elements
+        const candidates: number[] = [];
+        for (let i = 0; i < Math.min(count, 30); i++) {
+          const el = allEls.nth(i);
+          const href = await el.getAttribute('href').catch(() => null);
+          // Skip anchor-only, javascript: and empty hrefs
+          if (href !== null && (href === '#' || href.startsWith('javascript:') || href === '')) continue;
+          // Skip links that open new tabs — they never change current page state
+          const target = await el.getAttribute('target').catch(() => null);
+          if (target === '_blank') continue;
+          const visible = await el.isVisible().catch(() => false);
+          if (!visible) continue;
+          candidates.push(i);
+        }
+
+        if (candidates.length === 0) continue;
+        const idx = candidates[Math.floor(Math.random() * candidates.length)];
+        const el = allEls.nth(idx);
         const text = ((await el.textContent().catch(() => '')) ?? '').trim().slice(0, 60) || sel;
-        return { selector: `${sel}:nth-of-type(${idx + 1})`, text, found: true };
+        return { selector: sel, elementIdx: idx, text, found: true };
       } catch {
         continue;
       }
     }
-    return { selector: '', text: '', found: false };
+    return { selector: '', elementIdx: 0, text: '', found: false };
   }
 
   private _detectFailures(
@@ -323,37 +357,47 @@ export class SwarmAgent extends EventEmitter {
       });
     };
 
+    // Extract hostname of the page under test so we can filter third-party noise
+    let targetHost = '';
+    try { targetHost = new URL(urlBefore).hostname; } catch { /* ignore */ }
+
+    const isSameOrigin = (url: string) => {
+      try { return new URL(url).hostname === targetHost; } catch { return false; }
+    };
+
     // JS crash
     for (const err of pageErrors) {
       push('crash', err.message, { stack: err.stack });
     }
 
-    // 4xx / 5xx HTTP responses
+    // 4xx / 5xx HTTP responses — same-origin only to avoid third-party noise
     for (const req of evidence.networkRequests) {
-      if (req.status != null && req.status >= 400) {
-        const sev: FailureSeverity = req.status >= 500 ? 'http_error' : 'http_error';
-        push(sev, `HTTP ${req.status} on ${req.url}`, { url: req.url, status: req.status });
+      if (req.status != null && req.status >= 400 && isSameOrigin(req.url)) {
+        push('http_error', `HTTP ${req.status} on ${req.url}`, { url: req.url, status: req.status });
       }
     }
 
-    // Network failures
+    // Network failures — same-origin only
     for (const req of evidence.networkRequests) {
-      if (req.failed) {
+      if (req.failed && isSameOrigin(req.url)) {
         push('network', `Network failure: ${req.failureReason ?? 'unknown'} — ${req.url}`, {
           url: req.url,
         });
       }
     }
 
-    // Console errors/warnings
+    // Console errors — skip generic "Failed to load resource" noise from third-party scripts
     for (const log of evidence.consoleLogs) {
-      if (log.level === 'error') {
+      if (log.level === 'error' && !log.text.includes('ERR_NAME_NOT_RESOLVED')) {
         push('console_error', `Console error: ${log.text.slice(0, 300)}`);
       }
     }
 
-    // Page went blank after click
-    if (clickedOk && isBlank) {
+    // Page went blank after click — only flag if no HTTP error already explains it
+    const hasHttpError = evidence.networkRequests.some(
+      (r) => r.status != null && r.status >= 400 && isSameOrigin(r.url),
+    );
+    if (clickedOk && isBlank && !hasHttpError) {
       push('navigation_failure', 'Page became blank after click — possible unhandled navigation or React crash');
     }
 

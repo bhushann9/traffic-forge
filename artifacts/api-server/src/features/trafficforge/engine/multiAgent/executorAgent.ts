@@ -209,7 +209,25 @@ export class ExecutorAgent {
 
     // Quick non-waiting check — count() never waits for elements to appear
     const count = await byRole.count().catch(() => 0);
-    if (count > 0) return byRole;
+    if (count === 1) return byRole;
+    if (count > 1) {
+      // Multiple matches (e.g. image + text link both named "Sauce Labs Backpack")
+      // CSS selector from DOM snapshot is more precise — prefer it when available
+      if (selector) {
+        const bySel = page.locator(selector);
+        const selCount = await bySel.count().catch(() => 0);
+        if (selCount === 1) {
+          logger.debug({ role, name, selector }, 'Using CSS selector (unique) over ambiguous role match');
+          return bySel;
+        }
+        if (selCount > 1) {
+          logger.debug({ role, name, selector }, 'CSS selector also ambiguous — using first()');
+          return bySel.first();
+        }
+      }
+      // No selector or selector found nothing — use first role match
+      return byRole.first();
+    }
 
     // Role+name yielded nothing — try CSS selector fallback
     if (selector) {
@@ -217,7 +235,7 @@ export class ExecutorAgent {
       const selCount = await bySel.count().catch(() => 0);
       if (selCount > 0) {
         logger.debug({ role, name, selector }, 'Using CSS selector fallback');
-        return bySel;
+        return selCount === 1 ? bySel : bySel.first();
       }
     }
 
