@@ -47,7 +47,7 @@ async function start() {
     logger.error({ err }, 'Failed to sweep stale running runs on startup');
   }
 
-  server.listen(port,'0.0.0.0' ,(err?: Error) => {
+  server.listen(port, '0.0.0.0', (err?: Error) => {
     if (err) {
       logger.error({ err }, 'Error listening on port');
       process.exit(1);

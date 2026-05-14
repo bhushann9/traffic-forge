@@ -55,6 +55,7 @@ test-website/
 .sixth/
 
 # Local environment overrides
+.env
 .env.local
 .env.*.local
 

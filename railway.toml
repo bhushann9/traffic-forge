@@ -9,13 +9,3 @@ healthcheckTimeout = 60
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
-[[services]]
-name = "api"
-source = "."
-
-[[services]]
-name = "web"
-source = "."
-
-[services.web.build]
-dockerfilePath = "artifacts/traffic-forge/Dockerfile"
