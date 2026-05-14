@@ -1239,5 +1239,6 @@ const runSeedAuth: RequestHandler = async (req, res) => {
   }
 };
 router.post('/scenario-runs/seed-auth', runSeedAuth);
+router.post('/scan', scanLimiter, scan);
 
 export default router;
