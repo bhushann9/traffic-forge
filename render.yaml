@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: trafficforge
+    runtime: node
+    buildCommand: pnpm install && pnpm run build:prod && pnpm --filter @workspace/api-server exec playwright install chromium --with-deps
+    startCommand: node --enable-source-maps artifacts/api-server/dist/index.mjs
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LLM_PROVIDER
+        value: groq
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: LOG_LEVEL
+        value: info
+      - key: DATABASE_URL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
